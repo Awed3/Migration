@@ -1,0 +1,111 @@
+---
+title: "Shockvariable (postproduction)"
+output: html_document
+date: "2025-07-15"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+---
+title: "Migration variable"
+output: html_document
+date: "2025-05-20"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(haven)
+
+
+sect7_w1 <- read_dta("/Users/bruger/Downloads/ETH_2011_ERSS_v02_M_Stata8/sect7_hh_w1.dta") |> rename_all(tolower)
+sect8_w1 <- read_dta("/Users/bruger/Downloads/ETH_2011_ERSS_v02_M_Stata8/sect8_hh_w1.dta") |> rename_all(tolower)
+sect7_w2 <- read_dta("/Users/bruger/Downloads/ETH_2013_ESS_v03_M_STATA/sect7_hh_w2.dta") |> rename_all(tolower)
+sect8_w2 <- read_dta("/Users/bruger/Downloads/ETH_2013_ESS_v03_M_STATA/sect8_hh_w2.dta") |> rename_all(tolower)
+sect7_w3 <- read_dta("/Users/bruger/Downloads/ETH_2015_ESS_v03_M_STATA/Household/sect7_hh_w3.dta") |> rename_all(tolower)
+sect8_w3 <- read_dta("/Users/bruger/Downloads/ETH_2015_ESS_v03_M_STATA/Household/sect8_hh_w3.dta") |> rename_all(tolower)
+
+
+idmap <- sect7_w2 %>% select(household_id, household_id2) #Creates a dataframe that only contains hh 1 and 2. 
+
+
+sect7_w1 <- sect7_w1 %>% left_join(idmap, by = "household_id") %>% 
+  filter(!is.na(household_id2)) 
+
+sect8_w1 <- sect8_w1 %>% left_join(idmap, by = "household_id") %>% 
+  filter(!is.na(household_id2)) 
+
+#left joins wave 1 first with correlating wave 2 hh_id2's using the idmap dataframe. Thus wave 1 has hh_id 1 and 2. We do the same operation for sect8 afterwards, as these are the main datasets used.
+```
+
+
+
+
+```{r}
+
+
+
+shock_w1 <- sect8_w1 %>% 
+  mutate(shock_occ = if_else(as.numeric(hh_s8q01) == 1, 1, 0),
+         shock_code = as_factor(hh_s8q00)) %>% 
+  filter(shock_occ == 1) %>%                  
+  select(household_id2, shock_code, shock_occ) %>% 
+  pivot_wider(names_from = shock_code, values_from = shock_occ, 
+              values_fill = 0, names_prefix = "shock_")
+
+shock_w2 <- sect8_w2 %>% 
+  mutate(shock_occ = if_else(as.numeric(hh_s8q01) == 1, 1, 0),
+         shock_code = as_factor(hh_s8q00)) %>% 
+  filter(shock_occ == 1) %>% 
+  select(household_id2, shock_code, shock_occ) %>% 
+  pivot_wider(names_from = shock_code, values_from = shock_occ, 
+              values_fill = 0, names_prefix = "shock_")
+
+shock_w3 <- sect8_w3 %>% 
+  mutate(shock_occ = if_else(as.numeric(hh_s8q01) == 1, 1, 0),
+         shock_code = as_factor(hh_s8q00)) %>% 
+  filter(shock_occ == 1) %>% 
+  select(household_id2, shock_code, shock_occ) %>% 
+  pivot_wider(names_from = shock_code, values_from = shock_occ, 
+              values_fill = 0, names_prefix = "shock_")
+
+
+
+```
+
+```{r}
+wave1_data <- sect7_w1 %>% 
+  left_join(shock_w1, by = "household_id2") %>% 
+  mutate(wave = 1)
+wave2_data <- sect7_w2 %>% 
+  left_join(shock_w2, by = "household_id2") %>% 
+  mutate(wave = 2)
+wave3_data <- sect7_w3 %>% 
+  left_join(shock_w3, by = "household_id2") %>% 
+  mutate(wave = 3)
+glimpse(wave1_data)
+wave1_data <- wave1_data %>% mutate(across(-household_id2, ~ replace_na(., 0)))
+wave2_data <- wave2_data %>% mutate(across(-household_id2, ~ replace_na(., 0)))
+wave3_data <- wave3_data %>% mutate(across(-household_id2, ~ replace_na(., 0)))
+
+```
+
+
+```{r}
+shock_panel <- bind_rows(
+  wave1_data %>% select(household_id2, wave, starts_with("shock_")),
+  wave2_data %>% select(household_id2, wave, starts_with("shock_")),
+  wave3_data %>% select(household_id2, wave, starts_with("shock_"))
+) %>%
+  mutate(across(-c(household_id2, wave), ~ replace_na(.x, 0)))
+
+
+glimpse(shock_panel)
+```
+
